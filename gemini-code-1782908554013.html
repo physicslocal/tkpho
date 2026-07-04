@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TKPhO Tambon Grader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <script defer src="https://unpkg.com/mathlive"></script>
+
+    <script type="module">
+        import { ComputeEngine } from 'https://unpkg.com/@cortex-js/compute-engine?module';
+        window.ce = new ComputeEngine();
+    </script>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #6e8efb, #a777e3);
+            --bg-color: #f4f7f6;
+            --white: #ffffff;
+            --text-color: #2d3436;
+            --purple: #7d5fff;
+            --blue: #4834d4;
+            --success: #00b894;
+            --error: #ff7675;
+            --warning: #f1c40f;
+        }
+
+        * { box-sizing: border-box; font-family: 'Sarabun', sans-serif; }
+        body { margin: 0; background: var(--bg-color); color: var(--text-color); overflow-x: hidden; }
+
+        /* --- Transitions --- */
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* --- Layout --- */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .hidden { display: none !important; }
+        .card { background: var(--white); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); padding: 30px; margin-bottom: 20px; }
+
+        /* --- UI Elements --- */
+        .btn { padding: 12px 24px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600; transition: 0.3s; }
+        .btn-primary { background: var(--primary-gradient); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(110, 142, 251, 0.4); }
+        
+        /* --- Login Page --- */
+        .login-bg { height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--primary-gradient); }
+        .login-card { width: 450px; background: white; border-radius: 25px; padding: 40px; text-align: center; }
+        .tab-group { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; overflow-x: auto;}
+        .tab { flex: 1; padding: 10px; cursor: pointer; font-weight: 600; color: #aaa; white-space: nowrap; text-align: center;}
+        .tab.active { color: var(--purple); border-bottom: 3px solid var(--purple); }
+        .input-group { text-align: left; margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input-group input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ddd; }
+
+        /* --- Dashboard --- */
+        .progress-row { display: flex; align-items: center; gap: 15px; background: #f8f9fa; padding: 15px; border-radius: 15px; margin-bottom: 10px; }
+        .tick { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #ddd; display: inline-block; position: relative; }
+        .tick.checked { background: var(--success); border-color: var(--success); }
+        .tick.checked::after { content: '✓'; color: white; position: absolute; top: -3px; left: 3px; font-size: 12px; }
+        .bar-container { height: 10px; background: #eee; border-radius: 5px; flex-grow: 1; overflow: hidden; margin: 10px 0; }
+        .bar { height: 100%; background: var(--primary-gradient); transition: width 0.5s; }
+
+        /* --- Answer Page --- */
+        .exam-layout { display: flex; gap: 20px; }
+        .sidebar { width: 20%; background: white; border-radius: 20px; padding: 20px; height: fit-content; }
+        .q-btn { width: 100%; text-align: left; padding: 12px; margin-bottom: 8px; border-radius: 10px; border: none; background: #f1f2f6; cursor: pointer; }
+        .q-btn.active { background: var(--purple); color: white; }
+        .q-btn.correct { border-left: 5px solid var(--success); }
+        .main-content { width: 80%; }
+        
+        /* Math Keyboard */
+        .math-kb { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-top: 15px; background: #f1f2f6; padding: 15px; border-radius: 15px; }
+        .kb-btn { padding: 10px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-size: 18px; }
+        .kb-btn:hover { background: #eee; }
+        
+        /* MathField Customization */
+        math-field { font-size: 24px; padding: 15px; border-radius: 15px; border: 2px solid #7d5fff; background: white; width: 100%; margin: 20px 0; }
+
+        /* --- Notification --- */
+        .notif { position: fixed; top: 20px; right: 20px; padding: 20px 40px; border-radius: 15px; color: white; font-weight: bold; z-index: 9999; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s; }
+        .notif.green { background: var(--success); }
+        .notif.red { background: var(--error); }
+        .notif.yellow { background: var(--warning); color: #000; }
+
+        /* 🌟 โค้ดส่วนแก้ปัญหารูปภาพซูมแล้วยืด / ทำให้ออกมาเป็นวงกลมสวยงาม */
+        img[alt*="Logo"], img[alt*="logo"], .profile-avatar, .zoom-circle-img {
+            aspect-ratio: 1 / 1 !important;
+            object-fit: cover !important;
+            border-radius: 50% !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="section-login" class="login-bg">
+    <div class="login-card card fade-in">
+        <img src="TkPhO_Zero.png" alt="TKPhO Logo" style="width: 100px; height: 100px; margin: 0 auto 15px; display: block;">
+        <h2 style="color: var(--purple);">TKPhO Tambon Grader</h2>
+        <p>ระบบสอบฟิสิกส์ประจำตำบล</p>
+        
+        <div class="tab-group">
+            <div id="tab-student" class="tab active" onclick="switchLoginTab('student')">นักเรียน</div>
+            <div id="tab-admin" class="tab" onclick="switchLoginTab('admin')">ผู้ดูแลระบบ</div>
+        </div>
+
+        <div id="login-form">
+            <div id="reg-fields" class="hidden">
+                <div class="input-group"><label>ชื่อ-นามสกุล</label><input type="text" id="reg-fullname" placeholder="เช่น สมชาย ใจดี"></div>
+            </div>
+            <div class="input-group"><label>ชื่อผู้ใช้ (username)</label><input type="text" id="login-user" placeholder="เช่น somchai01"></div>
+            <div class="input-group"><label>รหัสผ่าน</label><input type="password" id="login-pass" placeholder="ใส่รหัสผ่านของคุณ"></div>
+            <div id="reg-reminder-field" class="input-group hidden"><label>เบาะแสระหัสผ่าน (Password Reminder)</label><input type="text" id="reg-reminder" placeholder="เช่น ชื่อสัตว์เลี้ยง"></div>
+            
+            <div id="forgot-area" style="text-align: left; margin-bottom: 15px;">
+                <button class="btn" style="padding:0; color: var(--purple); background:none;" onclick="showReminder()">ลืมรหัสผ่าน?</button>
+            </div>
+
+            <button id="btn-main-action" class="btn btn-primary" style="width: 100%;" onclick="handleAuth()">เข้าสู่ระบบ</button>
+            <p id="toggle-auth-text" style="cursor: pointer; margin-top: 15px; font-size: 14px;" onclick="toggleAuthMode()">ยังไม่มีบัญชี? สมัครสมาชิก</p>
+        </div>
+    </div>
+</div>
+
+<div id="section-dashboard" class="container hidden fade-in">
+    <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="TkPhO_Zero.png" alt="TKPhO Logo" style="width: 50px; height: 50px;">
+            <h2 style="margin: 0;">TKPhO Tambon Grader</h2>
+        </div>
+        <div>
+            <span id="display-name" style="margin-right: 15px; font-weight: bold;"></span>
+            <button class="btn" style="background: #ff767522; color: #ff7675;" onclick="logout()">ออกจากระบบ</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>📊 ความก้าวหน้าของคุณ</h3>
+        <div class="progress-row"><div id="cond-1" class="tick"></div> 1. ทำข้อสอบระดับปานกลางและยากรวมกันอย่างน้อย 20 ข้อ</div>
+        <div class="progress-row"><div id="cond-2" class="tick"></div> 2. ทำข้อสอบทุกระดับรวมกันอย่างน้อย 30 ข้อ</div>
+        <div class="progress-row"><div id="cond-3" class="tick"></div> 3. มีคุณสมบัติสมัครเข้า ITSO (Inter Tambon Science Olympiad)</div>
+    </div>
+
+    <div class="card">
+        <h3>📈 สถานะการทำข้อสอบ</h3>
+        <div>🟢 ระดับง่าย <span id="txt-easy" style="float: right;">0/15</span><div class="bar-container"><div id="bar-easy" class="bar" style="width: 0%;"></div></div></div>
+        <div style="margin-top:15px;">🟡 ระดับปานกลาง <span id="txt-medium" style="float: right;">0/15</span><div class="bar-container"><div id="bar-medium" class="bar" style="width: 0%;"></div></div></div>
+        <div style="margin-top:15px;">🔴 ระดับยาก <span id="txt-hard" style="float: right;">0/15</span><div class="bar-container"><div id="bar-hard" class="bar" style="width: 0%;"></div></div></div>
+    </div>
+
+    <div class="card" style="text-align: center;">
+        <h3>🎯 เลือกระดับความยาก</h3>
+        <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 25px;">
+            <div id="diff-Easy" class="card" style="flex: 1; border: 2px solid #eee; cursor: pointer;" onclick="selectDiff('Easy')"><h4 style="color:var(--success)">ระดับง่าย</h4>15 ข้อ</div>
+            <div id="diff-Medium" class="card" style="flex: 1; border: 2px solid #eee; cursor: pointer;" onclick="selectDiff('Medium')"><h4 style="color:var(--warning)">ระดับปานกลาง</h4>15 ข้อ</div>
+            <div id="diff-Hard" class="card" style="flex: 1; border: 2px solid #eee; cursor: pointer;" onclick="selectDiff('Hard')"><h4 style="color:var(--error)">ระดับยาก</h4>15 ข้อ</div>
+        </div>
+        <button class="btn btn-primary" style="width: 80%; font-size: 18px;" onclick="goToExam()">เริ่มทำข้อสอบ →</button>
+    </div>
+</div>
+
+<div id="section-exam" class="container hidden fade-in">
+    <div class="exam-layout">
+        <div class="sidebar card">
+            <h4 style="margin-top:0;">รายการข้อสอบ</h4>
+            <div id="q-list"></div>
+        </div>
+        <div class="main-content">
+            <div class="card">
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 id="q-title" style="margin: 0;">ข้อที่ 1</h2>
+                    <span id="diff-badge" style="padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold;"></span>
+                </div>
+                
+                <button class="btn" style="background: #0984e3; color: white; display: flex; align-items: center; gap: 10px;" onclick="openDrive()">
+                    📄 เปิดโจทย์จาก Google Drive
+                </button>
+
+                <p style="margin-top: 25px; font-weight: bold; color: #636e72;">📝 คำตอบของคุณ</p>
+                <div id="last-answer-display" style="padding: 10px; background: #f8f9fa; border-radius: 10px; margin-bottom: 10px; font-size: 14px; color: #aaa;">คำตอบของคุณจะแสดงที่นี่</div>
+                
+                <math-field id="answer-mf">พิมพ์คำตอบที่นี่ . . .</math-field>
+
+                <div class="math-kb">
+                    <button class="kb-btn" onclick="ins('\\frac{#@}{#?}')">a/b</button>
+                    <button class="kb-btn" onclick="ins('\\sqrt{#@}')">√</button>
+                    <button class="kb-btn" onclick="ins('\\sqrt[3]{#@}')">∛</button>
+                    <button class="kb-btn" onclick="ins('^{#?}')">xⁿ</button>
+                    <button class="kb-btn" onclick="ins('\\pi')">π</button>
+                    <button class="kb-btn" style="background: #ff767522; color: #ff7675;" onclick="clr()">ล้าง</button>
+                    <button class="kb-btn" onclick="ins('\\alpha')">α</button><button class="kb-btn" onclick="ins('\\beta')">β</button>
+                    <button class="kb-btn" onclick="ins('\\gamma')">γ</button><button class="kb-btn" onclick="ins('\\delta')">δ</button>
+                    <button class="kb-btn" onclick="ins('\\epsilon')">ε</button><button class="kb-btn" onclick="ins('\\eta')">η</button>
+                    <button class="kb-btn" onclick="ins('\\theta')">θ</button><button class="kb-btn" onclick="ins('\\lambda')">λ</button>
+                    <button class="kb-btn" onclick="ins('\\mu')">μ</button><button class="kb-btn" onclick="ins('\\rho')">ρ</button>
+                    <button class="kb-btn" onclick="ins('\\sigma')">σ</button><button class="kb-btn" onclick="ins('\\tau')">τ</button>
+                    <button class="kb-btn" onclick="ins('\\upsilon')">υ</button><button class="kb-btn" onclick="ins('\\omega')">ω</button>
+                    <button class="kb-btn" onclick="ins('\\Theta')">Θ</button><button class="kb-btn" onclick="ins('\\Phi')">Φ</button>
+                    <button class="kb-btn" onclick="ins('\\Omega')">Ω</button><button class="kb-btn" onclick="ins('(')"> ( </button>
+                    <button class="kb-btn" onclick="ins(')')"> ) </button>
+                </div>
+
+                <div style="margin-top: 30px; display: flex; gap: 15px;">
+                    <button id="btn-submit-answer" class="btn btn-primary" onclick="submitAnswer()">ส่งคำตอบ</button>
+                    <button class="btn" onclick="backToDashboard()">กลับหน้าหลัก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="section-admin" class="container hidden fade-in">
+    <div class="card" style="display: flex; justify-content: space-between;">
+        <h2>Admin Panel - TKPhO</h2>
+        <button class="btn" onclick="logout()">ออกจากระบบ</button>
+    </div>
+
+    <div class="tab-group">
+        <div id="adm-tab-itso" class="tab active" onclick="switchAdminView('itso')">มีคุณสมบัติ ITSO</div>
+        <div id="adm-tab-m20" class="tab" onclick="switchAdminView('m20')">ปานกลาง+ยาก ≥ 20</div>
+        <div id="adm-tab-t30" class="tab" onclick="switchAdminView('t30')">ทุกระดับ ≥ 30</div>
+        <div id="adm-tab-none" class="tab" onclick="switchAdminView('none')">ยังไม่ผ่านเงื่อนไขใดๆ</div>
+        <div id="adm-tab-keys" class="tab" onclick="switchAdminView('keys')">กำหนดเฉลย</div>
+    </div>
+
+    <div id="admin-table-view" class="card">
+        <table id="itso-table" style="width: 100%; border-collapse: collapse;">
+            <thead style="background: var(--purple); color: white;">
+                <tr><th style="padding:10px;">ชื่อ-นามสกุล</th><th>ทั้งหมด /45</th><th>ง่าย /15</th><th>กลาง /15</th><th>ยาก /15</th></tr>
+            </thead>
+            <tbody id="itso-list-body" style="text-align: center;"></tbody>
+        </table>
+        <button class="btn btn-primary" style="margin-top: 20px;" onclick="window.print()">🖨️ พิมพ์ตาราง</button>
+    </div>
+
+    <div id="admin-keys-view" class="hidden">
+        <div class="card" style="background: #fff3cd; border: 1px solid #ffeeba; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; padding: 15px 25px;">
+            <div style="font-weight: bold; color: #856404; font-size: 16px;">⚙️ การตั้งค่าระบบข้อสอบ (Global Settings):</div>
+            <div style="display: flex; gap: 20px;">
+                <label style="cursor: pointer; font-weight: 600;">
+                    <input type="radio" name="submissionMode" value="multiple" checked onchange="changeSubmissionMode('multiple')"> ส่งคำตอบได้เรื่อยๆ (แก้ไขได้)
+                </label>
+                <label style="cursor: pointer; font-weight: 600; color: #c0392b;">
+                    <input type="radio" name="submissionMode" value="single" onchange="changeSubmissionMode('single')"> ส่งได้ครั้งเดียวเท่านั้น (ห้ามส่งซ้ำ)
+                </label>
+            </div>
+        </div>
+
+        <div class="card" style="text-align: center; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px;">
+            <h3 style="margin-top:0;">🎯 เลือกระดับความยาก (สำหรับกำหนดเฉลย)</h3>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <div id="adm-diff-Easy" class="card" style="flex: 1; border: 2px solid var(--purple); cursor: pointer; padding: 15px;" onclick="setAdminKeyDiff('Easy')"><h4 style="color:var(--success); margin:0;">ระดับง่าย</h4></div>
+                <div id="adm-diff-Medium" class="card" style="flex: 1; border: 2px solid #eee; cursor: pointer; padding: 15px;" onclick="setAdminKeyDiff('Medium')"><h4 style="color:var(--warning); margin:0;">ระดับปานกลาง</h4></div>
+                <div id="adm-diff-Hard" class="card" style="flex: 1; border: 2px solid #eee; cursor: pointer; padding: 15px;" onclick="setAdminKeyDiff('Hard')"><h4 style="color:var(--error); margin:0;">ระดับยาก</h4></div>
+            </div>
+        </div>
+        
+        <div class="exam-layout">
+            <div class="sidebar card">
+                <h4 style="margin-top:0;">รายการข้อสอบ</h4>
+                <div id="adm-q-list"></div>
+            </div>
+            <div class="main-content card">
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 id="adm-q-title" style="margin: 0;">กำหนดเฉลย ข้อที่ 1</h2>
+                    <span id="adm-diff-badge" style="padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; background: #00b89422; color: #00b894;">ระดับง่าย</span>
+                </div>
+                
+                <button class="btn" style="background: #0984e3; color: white; display: flex; align-items: center; gap: 10px; margin-bottom: 20px;" onclick="openAdminDrive()">
+                    📄 เปิดโจทย์จาก Google Drive
+                </button>
+                
+                <math-field id="admin-key-mf"></math-field>
+                
+                <div class="math-kb" id="admin-kb-container">
+                    <button class="kb-btn" onclick="ins('\\frac{#@}{#?}')">a/b</button>
+                    <button class="kb-btn" onclick="ins('\\sqrt{#@}')">√</button>
+                    <button class="kb-btn" onclick="ins('\\sqrt[3]{#@}')">∛</button>
+                    <button class="kb-btn" onclick="ins('^{#?}')">xⁿ</button>
+                    <button class="kb-btn" onclick="ins('\\pi')">π</button>
+                    <button class="kb-btn" style="background: #ff767522; color: #ff7675;" onclick="clrAdmin()">ล้าง</button>
+                    <button class="kb-btn" onclick="ins('\\alpha')">α</button><button class="kb-btn" onclick="ins('\\beta')">β</button>
+                    <button class="kb-btn" onclick="ins('\\gamma')">γ</button><button class="kb-btn" onclick="ins('\\delta')">δ</button>
+                    <button class="kb-btn" onclick="ins('\\epsilon')">ε</button><button class="kb-btn" onclick="ins('\\eta')">η</button>
+                    <button class="kb-btn" onclick="ins('\\theta')">θ</button><button class="kb-btn" onclick="ins('\\lambda')">λ</button>
+                    <button class="kb-btn" onclick="ins('\\mu')">μ</button><button class="kb-btn" onclick="ins('\\rho')">ρ</button>
+                    <button class="kb-btn" onclick="ins('\\sigma')">σ</button><button class="kb-btn" onclick="ins('\\tau')">τ</button>
+                    <button class="kb-btn" onclick="ins('\\upsilon')">υ</button><button class="kb-btn" onclick="ins('\\omega')">ω</button>
+                    <button class="kb-btn" onclick="ins('\\Theta')">Θ</button><button class="kb-btn" onclick="ins('\\Phi')">Φ</button>
+                    <button class="kb-btn" onclick="ins('\\Omega')">Ω</button><button class="kb-btn" onclick="ins('(')"> ( </button>
+                    <button class="kb-btn" onclick="ins(')')"> ) </button>
+                </div>
+                
+                <button class="btn btn-primary" style="margin-top:20px; width:100%" onclick="saveKey()">บันทึกเฉลย (Save to Firebase)</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div id="notif-box" class="notif hidden"></div>
+
+<script>
+    // --- FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBdtX4_7MZKjPZuPYpPiz71myguKDpERlA",
+      authDomain: "tkpho-tambon-grader.firebaseapp.com",
+      databaseURL: "https://tkpho-tambon-grader-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "tkpho-tambon-grader",
+      storageBucket: "tkpho-tambon-grader.firebasestorage.app",
+      messagingSenderId: "311022156552",
+      appId: "1:311022156552:web:5030a1553348379ca18abd",
+      measurementId: "G-1K0VH3F7EQ"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // --- LOCAL APP STATE ---
+    let currentUser = null;
+    let currentDiff = 'Easy';
+    let currentQIndex = 0;
+    let adminKeyDiff = 'Easy';
+    let adminQIndex = 0;
+    
+    // 🌟 ตัวแปรเก็บสถานะการส่งข้อสอบ (ดึงจาก Firebase)
+    let globalSubmissionMode = 'multiple'; 
+
+    let appData = {
+        users: {
+            "admin": { fullname: "Admin System", pass: "thakham01", role: "admin" }
+        },
+        answerKeys: {
+            Easy: Array(15).fill(""),
+            Medium: Array(15).fill(""),
+            Hard: Array(15).fill("")
+        },
+        studentProgress: {},
+        settings: { submissionMode: 'multiple' }
+    };
+
+    // โหลดฐานข้อมูลเริ่มต้นและ Sync Realtime
+    database.ref('/').once('value').then((snapshot) => {
+        if (!snapshot.val()) {
+            database.ref('/').set(appData);
+        } else {
+            let snap = snapshot.val();
+            if (snap.users) appData.users = snap.users;
+            if (snap.answerKeys) {
+                appData.answerKeys.Easy   = (snap.answerKeys.Easy   || Array(15).fill("")).concat(Array(15).fill("")).slice(0,15);
+                appData.answerKeys.Medium = (snap.answerKeys.Medium || Array(15).fill("")).concat(Array(15).fill("")).slice(0,15);
+                appData.answerKeys.Hard   = (snap.answerKeys.Hard   || Array(15).fill("")).concat(Array(15).fill("")).slice(0,15);
+            }
+            if (snap.studentProgress) appData.studentProgress = snap.studentProgress;
+            if (snap.settings && snap.settings.submissionMode) globalSubmissionMode = snap.settings.submissionMode;
+        }
+
+        // Realtime listeners
+        database.ref('users').on('value', s => { if(s.val()) appData.users = s.val(); });
+        database.ref('answerKeys').on('value', s => { 
+            if(s.val()) {
+                appData.answerKeys.Easy   = (s.val().Easy   || Array(15).fill("")).concat(Array(15).fill("")).slice(0,15);
+                appData.answerKeys.Medium = (s.val().Medium || Array(15).fill("")).concat(Array(15).fill("")).slice(0,15);
+                appData.answerKeys.Hard   = (s.val().Hard   || Array(15).fill("")).concat(Array(15).fill("")).slice(0,15);
+            }
+        });
+        
+        // 🌟 ติดตามการตั้งค่ารูปแบบการส่งจากแอดมิน Realtime
+        database.ref('settings/submissionMode').on('value', s => {
+            if(s.val()) {
+                globalSubmissionMode = s.val();
+                let radio = document.querySelector(`input[name="submissionMode"][value="${globalSubmissionMode}"]`);
+                if(radio) radio.checked = true;
+                // อัปเดตสถานะปุ่มส่งทันทีหากกำลังเปิดหน้าจอสอบอยู่
+                checkSubmissionLockStatus();
+            }
+        });
+
+        database.ref('studentProgress').on('value', s => { 
+            if(s.val()) {
+                appData.studentProgress = s.val();
+                if(currentUser && appData.users[currentUser] && appData.users[currentUser].role !== 'admin') {
+                    updateDashboard();
+                    if(!document.getElementById('section-exam').classList.contains('hidden')) {
+                        renderQList();
+                        checkSubmissionLockStatus();
+                    }
+                }
+            }
+        });
+    });
+
+    const driveLinks = {
+        Easy: [
+            "https://drive.google.com/file/d/1uE3QuX6Gn0-KPj1Z98mV_Lbn2Q7O29tb/view", "https://drive.google.com/file/d/1xmqWgO1daVICzIgU5ydH2wrKtIu8z7RK/view",
+            "https://drive.google.com/file/d/1xethlfXz1NoqJ4rin46ndcElXjpeWopG/view", "https://drive.google.com/file/d/1u8kisw7KycIEJMRFl4baPJPhFd9L-Y-f/view",
+            "https://drive.google.com/file/d/14hHznRzgXj6Rk8_PuvaOe5IeXisqFSWU/view", "https://drive.google.com/file/d/1Q3iRtuCLBcL3U1TQ1cxmP-K3MpMK-uVf/view",
+            "https://drive.google.com/file/d/178LvEHO5Apw-I_F46MRPOKAaS-KH_5_Q/view", "https://drive.google.com/file/d/1D_SmTEAluTW3IGy-wQ2bFee_cj1VM7Fu/view",
+            "https://drive.google.com/file/d/1hEwzbSehXLZDBZxvkibt1BcGIodzmFi3/view", "https://drive.google.com/file/d/1KBVJWaLdWWR-mfnXP6fdSM9SXgQELUoR/view",
+            "https://drive.google.com/file/d/1pGBedkvmd7In35StyEWtEZx8GJ-zRfEU/view", "https://drive.google.com/file/d/1qekGMq4VLEjnDt88dCMsNAZWZj8tYoB0/view",
+            "https://drive.google.com/file/d/19HGYtN5u06QaCLn4UY3o-kyR-LvTmmaV/view", "https://drive.google.com/file/d/18lrOSZiMbv3ucmCT_gPJMQGEQrN6iSU3/view",
+            "https://drive.google.com/file/d/1C5Zy-2oDrQ697awJlUKwsGFry_qAtE04/view"
+        ],
+        Medium: [
+            "https://drive.google.com/file/d/1m0QthISgNiqSwjrjrg_L1n8MyEfiUWpS/view", "https://drive.google.com/file/d/1Ly9wXc7uVLGDhVCbcKWMA2N7EpMGDUgJ/view",
+            "https://drive.google.com/file/d/1d9zjJc1dsVadyG-HoB5b7y7O7AD8vhmF/view", "https://drive.google.com/file/d/1lZ9Q5FIczpkZ8UYXZZkXzNOI0PYA9x8O/view",
+            "https://drive.google.com/file/d/1jRRoHY-x4vGrIH7zKVtz2PmKMVtjOXRL/view", "https://drive.google.com/file/d/1zBXl6dK4AOA8EChTUr0X9E6oemcHwlBB/view",
+            "https://drive.google.com/file/d/1O6s6vE_8AfonEDc_j_8-uaRmEQODuhlJ/view", "https://drive.google.com/file/d/1WX3yk8MkFJ56u77q6riMxJMVQ8sglXCp/view",
+            "https://drive.google.com/file/d/1AzM4r9kUhN2CM0nwKQ96zoqjHhE842oE/view", "https://drive.google.com/file/d/1HUzeQU7YoVkqI9_TDr8Y92HxyoKdjN2F/view",
+            "https://drive.google.com/file/d/1GMxjFiogqggjZSbc27XU-3fsLGT4LsWk/view", "https://drive.google.com/file/d/1KcF-vlzFW2fcEzSBrgsaz905i3yBIKBP/view",
+            "https://drive.google.com/file/d/1HY2A3WR3BFaIsCMyQhAdForOascZJqng/view", "https://drive.google.com/file/d/1fof1t6bL_ekZL5hCasjhHAAp4tn3DRAA/view",
+            "https://drive.google.com/file/d/1gp2mmOhqhs6-zijNVz5ZofOhtvz_gQIe/view"
+        ],
+        Hard: [
+            "https://drive.google.com/file/d/1sY3Wo7sNpxoMQA8awABrNkIIcMygxcW-r/view", "https://drive.google.com/file/d/1vP4_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1wM5_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view", "https://drive.google.com/file/d/1xP5_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1yP6_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view", "https://drive.google.com/file/d/1zP7_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1-P8_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view", "https://drive.google.com/file/d/1_P9_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1aP0_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view", "https://drive.google.com/file/d/1bP1_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1cP2_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view", "https://drive.google.com/file/d/1dP3_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1eP4_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view", "https://drive.google.com/file/d/1fP5_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view",
+            "https://drive.google.com/file/d/1gP6_ZfGOf7fG2oH3jP6p39hC_iZpWzZf/view"
+        ]
+    };
+
+    // --- AUTHENTICATION LOGIC ---
+    let loginTab = 'student';
+    let isRegisterMode = false;
+
+    function switchLoginTab(role) {
+        loginTab = role;
+        document.getElementById('tab-student').classList.toggle('active', role === 'student');
+        document.getElementById('tab-admin').classList.toggle('active', role === 'admin');
+        
+        if (role === 'admin') {
+            isRegisterMode = false;
+            document.getElementById('reg-fields').classList.add('hidden');
+            document.getElementById('reg-reminder-field').classList.add('hidden');
+            document.getElementById('toggle-auth-text').classList.add('hidden');
+            document.getElementById('btn-main-action').innerText = "เข้าสู่ระบบ (แอดมิน)";
+        } else {
+            document.getElementById('toggle-auth-text').classList.remove('hidden');
+            document.getElementById('toggle-auth-text').innerText = "ยังไม่มีบัญชี? สมัครสมาชิก";
+            document.getElementById('btn-main-action').innerText = "เข้าสู่ระบบ";
+        }
+    }
+
+    function toggleAuthMode() {
+        if (loginTab === 'admin') return;
+        isRegisterMode = !isRegisterMode;
+        document.getElementById('reg-fields').classList.toggle('hidden', !isRegisterMode);
+        document.getElementById('reg-reminder-field').classList.toggle('hidden', !isRegisterMode);
+        document.getElementById('toggle-auth-text').innerText = isRegisterMode ? "มีบัญชีอยู่แล้ว? เข้าสู่ระบบ" : "ยังไม่มีบัญชี? สมัครสมาชิก";
+        document.getElementById('btn-main-action').innerText = isRegisterMode ? "ลงทะเบียนนักเรียน" : "เข้าสู่ระบบ";
+    }
+
+    function handleAuth() {
+        let u = document.getElementById('login-user').value.trim();
+        let p = document.getElementById('login-pass').value.trim();
+
+        if(!u || !p) return showNotif('กรุณากรอกข้อมูลให้ครบถ้วน', 'red');
+
+        if (isRegisterMode) {
+            let fn = document.getElementById('reg-fullname').value.trim();
+            let rem = document.getElementById('reg-reminder').value.trim();
+            if(!fn) return showNotif('กรุณากรอกชื่อ-นามสกุล', 'red');
+            if(appData.users[u]) return showNotif('username นี้ถูกใช้งานแล้ว', 'red');
+
+            let newUser = { fullname: fn, pass: p, role: 'student', reminder: rem };
+            database.ref('users/' + u).set(newUser).then(() => {
+                showNotif('สมัครสมาชิกสำเร็จ ระบบกำลังเข้าสู่ระบบให้คุณ', 'green');
+                currentUser = u;
+                isRegisterMode = false;
+                showSection('dashboard');
+                updateDashboard();
+            });
+        } else {
+            if (appData.users[u] && appData.users[u].pass === p) {
+                currentUser = u;
+                showNotif('เข้าสู่ระบบสำเร็จ', 'green');
+                if (appData.users[u].role === 'admin') {
+                    showSection('admin');
+                    switchAdminView('itso');
+                } else {
+                    showSection('dashboard');
+                    updateDashboard();
+                }
+            } else {
+                showNotif('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'red');
+            }
+        }
+    }
+
+    function showReminder() {
+        let u = document.getElementById('login-user').value.trim();
+        if(!u) return showNotif('กรุณากรอก username ก่อนเพื่อดูเบาะแส', 'yellow');
+        if(appData.users[u]) {
+            let rem = appData.users[u].reminder || "ไม่ได้ตั้งค่าเบาะแสระไว้";
+            alert("เบาะแสของคุณคือ: " + rem);
+        } else {
+            showNotif('ไม่พบชื่อผู้ใช้นี้ในระบบ', 'red');
+        }
+    }
+
+    function logout() {
+        currentUser = null;
+        document.getElementById('login-user').value = "";
+        document.getElementById('login-pass').value = "";
+        showSection('login');
+    }
+
+    // --- STUDENT DASHBOARD LOGIC ---
+    function updateDashboard() {
+        if(!currentUser) return;
+        document.getElementById('display-name').innerText = "🙋‍♂️ " + appData.users[currentUser].fullname;
+        
+        let progress = appData.studentProgress[currentUser] || {};
+        let easyC = 0, medC = 0, hardC = 0;
+
+        for(let i=0; i<15; i++) {
+            if(progress['Easy_' + i] === true) easyC++;
+            if(progress['Medium_' + i] === true) medC++;
+            if(progress['Hard_' + i] === true) hardC++;
+        }
+
+        document.getElementById('txt-easy').innerText = `${easyC}/15`;
+        document.getElementById('bar-easy').style.width = `${(easyC/15)*100}%`;
+        document.getElementById('txt-medium').innerText = `${medC}/15`;
+        document.getElementById('bar-medium').style.width = `${(medC/15)*100}%`;
+        document.getElementById('txt-hard').innerText = `${hardC}/15`;
+        document.getElementById('bar-hard').style.width = `${(hardC/15)*100}%`;
+
+        let cond1 = (medC + hardC) >= 20;
+        let cond2 = (easyC + medC + hardC) >= 30;
+        let cond3 = cond1 && cond2;
+
+        document.getElementById('cond-1').className = 'tick ' + (cond1 ? 'checked' : '');
+        document.getElementById('cond-2').className = 'tick ' + (cond2 ? 'checked' : '');
+        document.getElementById('cond-3').className = 'tick ' + (cond3 ? 'checked' : '');
+    }
+
+    function selectDiff(d) {
+        currentDiff = d;
+        ['Easy','Medium','Hard'].forEach(x => {
+            document.getElementById('diff-'+x).style.borderColor = '#eee';
+            document.getElementById('diff-'+x).style.background = '#fff';
+        });
+        let color = d==='Easy'?'#00b894':d==='Medium'?'#f1c40f':'#ff7675';
+        document.getElementById('diff-'+d).style.borderColor = color;
+        document.getElementById('diff-'+d).style.background = color + '05';
+    }
+
+    function goToExam() {
+        currentQIndex = 0;
+        showSection('exam');
+        loadQuestion(0);
+    }
+
+    // --- EXAM LOGIC ---
+    function loadQuestion(index) {
+        currentQIndex = index;
+        document.getElementById('q-title').innerText = `ข้อที่ ${index + 1}`;
+        let badge = document.getElementById('diff-badge');
+        badge.innerText = currentDiff === 'Easy' ? 'ระดับง่าย' : currentDiff === 'Medium' ? 'ระดับปานกลาง' : 'ระดับยาก';
+        badge.style.background = currentDiff === 'Easy' ? '#00b89422' : currentDiff === 'Medium' ? '#f1c40f22' : '#ff767522';
+        badge.style.color = currentDiff === 'Easy' ? '#00b894' : currentDiff === 'Medium' ? '#f1c40f' : '#ff7675';
+
+        // เคลียร์และโหลดคำตอบเก่า (ถ้ามี)
+        let mf = document.getElementById('answer-mf');
+        let savedAnswers = appData.studentProgress[currentUser] || {};
+        let lastAns = savedAnswers[currentDiff + '_ans_' + index] || "";
+        
+        mf.value = lastAns;
+        document.getElementById('last-answer-display').innerText = lastAns ? `คำตอบที่บันทึกไว้ล่าสุด: ${lastAns}` : "ยังไม่มีคำตอบที่ส่งในข้อนี้";
+
+        renderQList();
+        checkSubmissionLockStatus(); // 🌟 ตรวจสอบว่าต้องล็อกปุ่มส่งคำตอบไหมในข้อนี้
+    }
+
+    function renderQList() {
+        let container = document.getElementById('q-list');
+        container.innerHTML = "";
+        let progress = appData.studentProgress[currentUser] || {};
+
+        for(let i=0; i<15; i++) {
+            let btn = document.createElement('button');
+            btn.className = 'q-btn';
+            if(i === currentQIndex) btn.className += ' active';
+            if(progress[currentDiff + '_' + i] === true) btn.className += ' correct';
+            
+            btn.innerText = `ข้อที่ ${i+1}`;
+            btn.onclick = () => loadQuestion(i);
+            container.appendChild(btn);
+        }
+    }
+
+    // 🌟 ฟังก์ชันตรวจสอบและสลับสถานะการล็อกปุ่มส่งคำตอบฝั่งนักเรียน
+    function checkSubmissionLockStatus() {
+        let progress = appData.studentProgress[currentUser] || {};
+        let hasSubmitted = progress[currentDiff + '_ans_' + currentQIndex] !== undefined;
+        let submitBtn = document.getElementById('btn-submit-answer');
+
+        if (globalSubmissionMode === 'single' && hasSubmitted) {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+            submitBtn.innerText = "ส่งคำตอบแล้ว (โหมดส่งครั้งเดียว)";
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            submitBtn.innerText = "ส่งคำตอบ";
+        }
+    }
+
+    function openDrive() {
+        let link = driveLinks[currentDiff][currentQIndex];
+        if(link) window.open(link, '_blank');
+        else showNotif('ไม่พบลิงก์โจทย์ข้อนี้', 'red');
+    }
+
+    function submitAnswer() {
+        let mf = document.getElementById('answer-mf');
+        let userAns = mf.value.trim();
+        if(!userAns || userAns === "พิมพ์คำตอบที่นี่ . . .") return showNotif('กรุณาพิมพ์คำตอบก่อนส่ง', 'yellow');
+
+        // 🌟 ตรวจสอบโหมดความปลอดภัยซ้ำอีกครั้งกันเด็กแฮกปุ่ม
+        let progress = appData.studentProgress[currentUser] || {};
+        if (globalSubmissionMode === 'single' && progress[currentDiff + '_ans_' + currentQIndex] !== undefined) {
+            showNotif('🚫 ข้อสอบนี้จำกัดสิทธิ์ให้ส่งคำตอบได้เพียงรอบเดียวเท่านั้น!', 'red');
+            checkSubmissionLockStatus();
+            return;
+        }
+
+        let correctAns = appData.answerKeys[currentDiff][currentQIndex] || "";
+        let isCorrect = false;
+
+        // คำนวณความถูกต้องโดย MathLive Engine
+        try {
+            if(correctAns.trim() !== "") {
+                let parsedUser = window.ce.parse(userAns);
+                let parsedCorrect = window.ce.parse(correctAns);
+                isCorrect = parsedUser.isSame(parsedCorrect) || parsedUser.evaluate().isSame(parsedCorrect.evaluate());
+            }
+        } catch(e) {
+            isCorrect = (userAns === correctAns);
+        }
+
+        // บันทึกลง Firebase Realtime
+        let updateObj = {};
+        updateObj[`studentProgress/${currentUser}/${currentDiff}_ans_${currentQIndex}`] = userAns;
+        updateObj[`studentProgress/${currentUser}/${currentDiff}_${currentQIndex}`] = isCorrect;
+
+        database.ref('/').update(updateObj).then(() => {
+            if(isCorrect) {
+                showNotif('🎉 บันทึกคำตอบสำเร็จและคำตอบถูกต้อง!', 'green');
+            } else {
+                showNotif('📥 บันทึกคำตอบลงระบบเรียบร้อยแล้ว', 'green');
+            }
+            loadQuestion(currentQIndex);
+        });
+    }
+
+    function backToDashboard() { showSection('dashboard'); updateDashboard(); }
+
+    // --- ADMIN PANEL LOGIC ---
+    // 🌟 ฟังก์ชันฝั่ง Admin ในการอัปเดตสถานะของโหมดสอบลง Firebase
+    function changeSubmissionMode(mode) {
+        database.ref('settings/submissionMode').set(mode).then(() => {
+            showNotif(`⚙️ อัปเดตโหมดข้อสอบเป็น: ${mode === 'single' ? 'ส่งได้รอบเดียว' : 'ส่งได้เรื่อยๆ'} สำเร็จ`, 'green');
+        });
+    }
+
+    function switchAdminView(view) {
+        let tabs = ['itso','m20','t30','none','keys'];
+        tabs.forEach(t => document.getElementById('adm-tab-'+t).classList.toggle('active', t===view));
+
+        if(view === 'keys') {
+            document.getElementById('admin-table-view').classList.add('hidden');
+            document.getElementById('admin-keys-view').classList.remove('hidden');
+            setAdminKeyDiff('Easy');
+        } else {
+            document.getElementById('admin-table-view').classList.remove('hidden');
+            document.getElementById('admin-keys-view').classList.add('hidden');
+            renderAdminTable(view);
+        }
+    }
+
+    function renderAdminTable(filter) {
+        let tbody = document.getElementById('itso-list-body');
+        tbody.innerHTML = "";
+
+        Object.keys(appData.users).forEach(u => {
+            let user = appData.users[u];
+            if(user.role === 'admin') return;
+
+            let progress = appData.studentProgress[u] || {};
+            let easyC = 0, medC = 0, hardC = 0;
+            for(let i=0; i<15; i++) {
+                if(progress['Easy_' + i] === true) easyC++;
+                if(progress['Medium_' + i] === true) medC++;
+                if(progress['Hard_' + i] === true) hardC++;
+            }
+            let total = easyC + medC + hardC;
+
+            let cond1 = (medC + hardC) >= 20;
+            let cond2 = total >= 30;
+            let cond3 = cond1 && cond2;
+
+            let match = false;
+            if(filter === 'itso' && cond3) match = true;
+            if(filter === 'm20' && cond1) match = true;
+            if(filter === 't30' && cond2) match = true;
+            if(filter === 'none' && !cond1 && !cond2) match = true;
+
+            if(match) {
+                let tr = document.createElement('tr');
+                tr.style.borderBottom = "1px solid #eee";
+                tr.innerHTML = `<td style="padding:12px; font-weight:600;">${user.fullname}</td>
+                                <td><b style="color:var(--purple)">${total}</b> /45</td>
+                                <td style="color:var(--success)">${easyC}</td>
+                                <td style="color:var(--warning)">${medC}</td>
+                                <td style="color:var(--error)">${hardC}</td>`;
+                tbody.appendChild(tr);
+            }
+        });
+    }
+
+    // Admin Keys Setup
+    function setAdminKeyDiff(d) { 
+        adminKeyDiff = d;
+        adminQIndex = 0;
+        document.querySelectorAll('[id^="adm-diff-"]').forEach(el => el.style.borderColor = '#eee');
+        document.getElementById('adm-diff-'+d).style.borderColor = 'var(--purple)';
+
+        let badge = document.getElementById('adm-diff-badge');
+        badge.innerText = d === 'Easy' ? 'ระดับง่าย' : d === 'Medium' ? 'ระดับปานกลาง' : 'ระดับยาก';
+        badge.style.background = d === 'Easy' ? '#00b89422' : d === 'Medium' ? '#f1c40f22' : '#ff767522';
+        badge.style.color = d === 'Easy' ? '#00b894' : d === 'Medium' ? '#f1c40f' : '#ff7675';
+        
+        renderAdminKeyList(); 
+        loadAdminKey(0); 
+    }
+
+    function loadAdminKey(i) {
+        adminQIndex = i;
+        document.getElementById('adm-q-title').innerText = `กำหนดเฉลย ข้อที่ ${i+1}`;
+        document.getElementById('admin-key-mf').value = appData.answerKeys[adminKeyDiff][i] || "";
+        renderAdminKeyList();
+    }
+
+    function renderAdminKeyList() {
+        let container = document.getElementById('adm-q-list');
+        container.innerHTML = "";
+        for(let i=0; i<15; i++) {
+            let btn = document.createElement('button');
+            btn.className = 'q-btn';
+            if(i === adminQIndex) btn.className += ' active';
+            if(appData.answerKeys[adminKeyDiff][i]) btn.className += ' correct';
+            btn.innerText = `ข้อที่ ${i+1}`;
+            btn.onclick = () => loadAdminKey(i);
+            container.appendChild(btn);
+        }
+    }
+
+    function openAdminDrive() {
+        let link = driveLinks[adminKeyDiff][adminQIndex];
+        if(link) window.open(link, '_blank');
+    }
+
+    function saveKey() {
+        let newKey = document.getElementById('admin-key-mf').value;
+        database.ref('answerKeys/' + adminKeyDiff + '/' + adminQIndex).set(newKey)
+        .then(() => {
+            showNotif(`🎉 บันทึกเฉลยข้อที่ ${adminQIndex+1} เรียบร้อย`, 'green');
+            renderAdminKeyList();
+        });
+    }
+
+    // --- UTILS ---
+    function ins(val) {
+        let activeMf = document.getElementById('section-exam').classList.contains('hidden') 
+            ? document.getElementById('admin-key-mf') 
+            : document.getElementById('answer-mf');
+        activeMf.insert(val);
+    }
+    function clr() { document.getElementById('answer-mf').value = ""; }
+    function clrAdmin() { document.getElementById('admin-key-mf').value = ""; }
+
+    function showSection(id) {
+        ['login','dashboard','exam','admin'].forEach(x => {
+            document.getElementById('section-'+x).classList.add('hidden');
+        });
+        document.getElementById('section-'+id).classList.remove('hidden');
+    }
+
+    function showNotif(msg, type) {
+        let box = document.getElementById('notif-box');
+        box.innerText = msg;
+        box.className = 'notif ' + (type === 'green' ? 'green' : type === 'red' ? 'red' : 'yellow');
+        box.classList.remove('hidden');
+        setTimeout(() => box.classList.add('hidden'), 3500);
+    }
+</script>
+</body>
+</html>
